@@ -1,7 +1,15 @@
 import os
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseSettings, validator
+try:
+    # Try Pydantic v1 import
+    from pydantic import BaseSettings, validator
+    PYDANTIC_V2 = False
+except ImportError:
+    # Fallback to Pydantic v2 import
+    from pydantic_settings import BaseSettings
+    from pydantic import field_validator
+    PYDANTIC_V2 = True
 
 
 class Settings(BaseSettings):
@@ -9,13 +17,13 @@ class Settings(BaseSettings):
     應用程序配置設置，使用pydantic進行環境變量驗證和類型轉換
     """
     # 數據庫配置
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/ticket_knowledge_db"
 
     # Redis配置
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6380/0"
 
     # 安全配置
-    SECRET_KEY: str
+    SECRET_KEY: str = "your_secret_key_here_change_in_production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -31,11 +39,19 @@ class Settings(BaseSettings):
     # CORS配置
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
 
-    @validator("ALLOWED_ORIGINS", pre=True)
-    def parse_allowed_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+    if PYDANTIC_V2:
+        @field_validator("ALLOWED_ORIGINS", mode="before")
+        @classmethod
+        def parse_allowed_origins(cls, v: Union[str, List[str]]) -> List[str]:
+            if isinstance(v, str):
+                return [origin.strip() for origin in v.split(",") if origin.strip()]
+            return v
+    else:
+        @validator("ALLOWED_ORIGINS", pre=True)
+        def parse_allowed_origins(cls, v: Union[str, List[str]]) -> List[str]:
+            if isinstance(v, str):
+                return [origin.strip() for origin in v.split(",") if origin.strip()]
+            return v
 
     # 文件上傳配置
     UPLOAD_DIR: str = "./uploads"
@@ -49,6 +65,12 @@ class Settings(BaseSettings):
     ELASTICSEARCH_URL: str = "http://localhost:9200"
     ELASTICSEARCH_USERNAME: Optional[str] = None
     ELASTICSEARCH_PASSWORD: Optional[str] = None
+
+    # Kafka配置
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
+    KAFKA_TOPIC_PREFIX: str = "ticket_knowledge"
+    KAFKA_CONSUMER_GROUP_ID: str = "ticket_knowledge_group"
+    KAFKA_AUTO_OFFSET_RESET: str = "earliest"
 
     # 郵件配置
     SMTP_SERVER: Optional[str] = None
@@ -66,10 +88,17 @@ class Settings(BaseSettings):
     HIGHLIGHT_TAG_OPEN: str = "<mark>"
     HIGHLIGHT_TAG_CLOSE: str = "</mark>"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    if PYDANTIC_V2:
+        model_config = {
+            "env_file": ".env",
+            "env_file_encoding": "utf-8",
+            "case_sensitive": True,
+        }
+    else:
+        class Config:
+            env_file = ".env"
+            env_file_encoding = "utf-8"
+            case_sensitive = True
 
 
 # 創建全局設置實例
