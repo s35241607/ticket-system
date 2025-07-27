@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "name": "Task Completion Git Commit",
+  "description": "Automatically creates a git commit whenever a task is completed, with the commit message based on the task details",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.py",
+      "tests/**/*.py",
+      "docs/**/*.md",
+      "*.py",
+      "*.md",
+      "*.yml",
+      "*.yaml",
+      "*.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A task has been completed and files have been modified. Please:\n\n1. Review the recent file changes to understand what task was completed\n2. Create an appropriate git commit with a descriptive message that reflects the completed task\n3. The commit message should be in Chinese and follow the format: \"完成任務: [task description]\"\n4. Use `git add .` to stage all changes, then `git commit -m \"[your message]\"`\n5. Make sure the commit message clearly describes what was accomplished\n\nPlease execute the git commands to commit these changes with an appropriate message based on the task that was completed."
+  }
+}
