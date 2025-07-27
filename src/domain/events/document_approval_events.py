@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 
 from .base_event import DomainEvent
@@ -76,4 +76,74 @@ class ApprovalWorkflowCompleted(DomainEvent):
     document_id: uuid.UUID
     final_status: str
     completed_by: uuid.UUID
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalWorkflowCreated(DomainEvent):
+    """審批工作流創建事件"""
+    workflow_id: uuid.UUID
+    name: str
+    description: str
+    created_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalWorkflowUpdated(DomainEvent):
+    """審批工作流更新事件"""
+    workflow_id: uuid.UUID
+    changes: Dict[str, Any]
+    updated_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalWorkflowActivated(DomainEvent):
+    """審批工作流啟用事件"""
+    workflow_id: uuid.UUID
+    activated_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalWorkflowDeactivated(DomainEvent):
+    """審批工作流停用事件"""
+    workflow_id: uuid.UUID
+    deactivated_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalStepCreated(DomainEvent):
+    """審批步驟創建事件"""
+    step_id: uuid.UUID
+    workflow_id: uuid.UUID
+    name: str
+    order: int
+    approver_type: str
+    is_parallel: bool
+    created_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalStepUpdated(DomainEvent):
+    """審批步驟更新事件"""
+    step_id: uuid.UUID
+    workflow_id: uuid.UUID
+    changes: Dict[str, Any]
+    updated_by: Optional[uuid.UUID]
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ApprovalActionCreated(DomainEvent):
+    """審批行為創建事件"""
+    action_id: uuid.UUID
+    approval_id: uuid.UUID
+    step_id: uuid.UUID
+    approver_id: uuid.UUID
+    action_type: str
+    comment: str
     timestamp: datetime = field(default_factory=datetime.now)
