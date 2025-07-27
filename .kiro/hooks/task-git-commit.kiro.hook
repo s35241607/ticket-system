@@ -18,6 +18,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "A task has been completed and files have been modified. Please:\n\n1. Review the recent file changes to understand what task was completed\n2. Create an appropriate git commit with a descriptive message that reflects the completed task\n3. The commit message should be in Chinese and follow the format: \"完成任務: [task description]\"\n4. Use `git add .` to stage all changes, then `git commit -m \"[your message]\"`\n5. Make sure the commit message clearly describes what was accomplished\n\nPlease execute the git commands to commit these changes with an appropriate message based on the task that was completed."
+    "prompt": "A task has been completed and files have been modified. Please:\n\nReview the recent file changes to understand what task was completed\n\nCreate a git commit message that follows the Conventional Commits specification\n\nInclude the related task number or name in the commit message (e.g., Tasks: #123 or Tasks: 調整登入流程)\n\nUse the following command to stage and commit the changes:\n\n```\ngit add .\ngit commit -m \"<type>(scope): <message>\\n\\nTasks: <task number or description>\"\n```\n\nThe commit message should:\n\nFollow the format: <type>(scope): <description>\n\nUse English for type and scope, but the description and task explanation may be in Chinese if preferred\n\nClearly describe what was done\n\nExample:\n\n```\ngit commit -m \"feat(login): 調整登入驗證流程，加入錯誤提示\\n\\nTasks: #TICKET-456\"\n```"
   }
 }
