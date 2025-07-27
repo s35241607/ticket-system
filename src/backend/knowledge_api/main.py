@@ -41,6 +41,10 @@ app.add_middleware(
 # app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 # app.include_router(search.router, prefix="/api/search", tags=["search"])
 
+# 包含文檔審批路由
+from .routers import document_approval
+app.include_router(document_approval.router, prefix="/api", tags=["document-approval"])
+
 
 # 啟動事件
 @app.on_event("startup")

@@ -1,591 +1,805 @@
-# Design Document
+# 設計文檔
 
-## Overview
+## 概述
 
-文檔審批流程系統將為知識庫系統提供完整的多階段審批機制，確保文檔內容的品質和合規性。系統將重用現有的工單系統中成熟的工作流架構，包括 Workflow、WorkflowStep 和 WorkflowApproval 模型，並針對文檔審批場景進行適配和擴展。
+本文檔概述了在現有知識管理系統中實施文檔審批工作流系統的設計。該設計遵循乾淨架構原則和事件驅動模式，與當前系統架構無縫整合，同時提供強大的審批功能。
 
-設計遵循現有的 Clean Architecture 原則和事件驅動架構，與現有微服務生態系統無縫整合。系統將通過領域事件與其他服務通信，確保鬆耦合和高可擴展性，同時提供完整的監控和運維支援。
+文檔審批工作流系統將擴展現有的 Document 實體，並引入新的領域實體來管理審批流程、工作流配置和稽核軌跡。系統將利用現有的事件驅動基礎設施，並與已建立的架構模式保持一致。
 
-## Architecture
+## 架構
 
-### 微服務架構圖
+### 高層架構
+
+文檔審批工作流系統遵循已建立的乾淨架構模式，具有四個不同的層次：
 
 ```mermaid
 graph TB
-    subgraph "Document Approval Service"
-        subgraph "Interface Layer"
-            A[Document API] --> B[Approval API]
-            B --> C[Workflow Config API]
-        end
-
-        subgraph "Application Layer"
-            D[Document Service] --> E[Approval Service]
-            E --> F[Workflow Service]
-        end
-
-        subgraph "Domain Layer"
-            H[Document Entity] --> I[Approval Entity]
-            I --> J[Workflow Entity]
-        end
-
-        subgraph "Infrastructure Layer"
-            K[Document Repository] --> L[Approval Repository]
-            L --> M[Workflow Repository]
-            M --> N[Event Publisher]
-        end
+    subgraph "Interface Layer"
+        API[REST API Controllers]
+        Events[Event Handlers]
     end
 
-    subgraph "External Services"
-        O[User Management Service]
-        P[Notification Service]
-        Q[Ticket System Service]
-        R[Message Queue - Kafka]
+    subgraph "Application Layer"
+        UC[Use Cases]
+        Services[Application Services]
     end
 
-    subgraph "Infrastructure"
-        S[PostgreSQL]
-        T[Redis Cache]
-        U[Elasticsearch]
-        V[Monitoring Stack]
+    subgraph "Domain Layer"
+        Entities[Domain Entities]
+        ValueObjects[Value Objects]
+        DomainEvents[Domain Events]
+        Repositories[Repository Interfaces]
     end
 
-    A --> D
-    D --> H
-    H --> K
-    N --> R
-    E --> O
-    E --> P
-    F --> Q
-    K --> S
-    L --> T
-    M --> U
-    N --> V
+    subgraph "Infrastructure Layer"
+        DB[Database Repositories]
+        EventPub[Event Publishers]
+        External[External Services]
+    end
+
+    API --> UC
+    Events --> UC
+    UC --> Entities
+    UC --> Repositories
+    Entities --> DomainEvents
+    DB --> Repositories
+    EventPub --> DomainEvents
+    External --> Services
 ```
 
-### 事件驅動架構圖
+### 與現有系統的整合
 
-```mermaid
-graph LR
-    subgraph "Document Approval Service"
-        A[Approval Service] --> B[Event Publisher]
-    end
+審批工作流系統與現有組件整合：
 
-    B --> C[Message Queue]
+- **Document 實體**：擴展審批相關方法和狀態
+- **事件系統**：利用現有事件發布者基礎設施
+- **用戶管理**：與現有用戶服務整合進行審批者解析
+- **通知系統**：使用現有通知基礎設施
+- **資料庫層**：擴展當前 SQLAlchemy 模型和儲存庫
 
-    subgraph "Event Consumers"
-        D[Notification Service]
-        E[Audit Service]
-        F[Analytics Service]
-        G[Ticket System]
-    end
+## 組件和介面
 
-    C --> D
-    C --> E
-    C --> F
-    C --> G
+### 領域層組件
 
-    subgraph "Domain Events"
-        H[DocumentSubmittedForApproval]
-        I[DocumentApproved]
-        J[DocumentRejected]
-        K[ApprovalTimeoutOccurred]
-    end
-```
+#### 核心實體
 
-### 審批流程狀態圖
-
-```mermaid
-stateDiagram-v2
-    [*] --> Draft : 創建文檔
-    Draft --> PendingApproval : 提交審批
-    Draft --> Published : 直接發布(有權限)
-
-    PendingApproval --> InReview : 審批者開始審核
-    InReview --> Approved : 批准
-    InReview --> Rejected : 拒絕
-    InReview --> RequiresChanges : 要求修改
-
-    RequiresChanges --> Draft : 修改文檔
-    Approved --> Published : 發布
-    Rejected --> [*] : 結束
-    Published --> [*] : 結束
-```
-
-## Components and Interfaces
-
-### 核心組件
-
-#### 1. DocumentApprovalWorkflow (文檔審批工作流)
+**DocumentApprovalWorkflow**
 
 ```python
-class DocumentApprovalWorkflow(Base):
-    """文檔審批工作流配置"""
+@dataclass
+class DocumentApprovalWorkflow:
+    id: uuid.UUID
+    name: str
+    description: str
+    steps: List[DocumentApprovalStep]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    def add_step(self, step: DocumentApprovalStep) -> None
+    def remove_step(self, step_id: uuid.UUID) -> None
+    def get_applicable_documents(self, document: Document) -> bool
+    def get_first_step(self) -> Optional[DocumentApprovalStep]
+```
+
+**DocumentApprovalStep**
+
+```python
+@dataclass
+class DocumentApprovalStep:
+    id: uuid.UUID
+    workflow_id: uuid.UUID
+    name: str
+    description: str
+    order: int
+    approver_type: ApproverType  # ROLE, DEPARTMENT, INDIVIDUAL
+    approver_criteria: Dict[str, Any]
+    is_parallel: bool
+    timeout_hours: Optional[int]
+    auto_approve_on_timeout: bool
+    created_at: datetime
+
+    def resolve_approvers(self, document: Document) -> List[uuid.UUID]
+    def is_timeout_exceeded(self, approval: DocumentApproval) -> bool
+```
+
+**DocumentApproval**
+
+```python
+@dataclass
+class DocumentApproval:
+    id: uuid.UUID
+    document_id: uuid.UUID
+    workflow_id: uuid.UUID
+    current_step_id: Optional[uuid.UUID]
+    status: ApprovalStatus
+    submitted_at: datetime
+    completed_at: Optional[datetime]
+    submitted_by: uuid.UUID
+    _events: List[DomainEvent]
+
+    def submit_for_approval(self, workflow: DocumentApprovalWorkflow) -> None
+    def approve_step(self, step_id: uuid.UUID, approver_id: uuid.UUID, comment: str) -> None
+    def reject(self, step_id: uuid.UUID, approver_id: uuid.UUID, comment: str) -> None
+    def request_changes(self, step_id: uuid.UUID, approver_id: uuid.UUID, comment: str) -> None
+    def progress_to_next_step(self) -> None
+    def complete_approval(self) -> None
+```
+
+**DocumentApprovalAction**
+
+```python
+@dataclass
+class DocumentApprovalAction:
+    id: uuid.UUID
+    approval_id: uuid.UUID
+    step_id: uuid.UUID
+    approver_id: uuid.UUID
+    action_type: ApprovalActionType
+    comment: str
+    created_at: datetime
+
+    @classmethod
+    def create_approval_action(cls, approval_id: uuid.UUID, step_id: uuid.UUID,
+                              approver_id: uuid.UUID, comment: str) -> 'DocumentApprovalAction'
+```
+
+#### 值物件
+
+**ApprovalStatus**
+
+```python
+class ApprovalStatus(Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    REQUIRES_CHANGES = "requires_changes"
+    CANCELLED = "cancelled"
+```
+
+**ApprovalActionType**
+
+```python
+class ApprovalActionType(Enum):
+    APPROVE = "approve"
+    REJECT = "reject"
+    REQUEST_CHANGES = "request_changes"
+    ESCALATE = "escalate"
+    AUTO_APPROVE = "auto_approve"
+```
+
+**ApproverType**
+
+```python
+class ApproverType(Enum):
+    ROLE = "role"
+    DEPARTMENT = "department"
+    INDIVIDUAL = "individual"
+    CREATOR_MANAGER = "creator_manager"
+```
+
+#### 領域事件
+
+**審批工作流事件**
+
+```python
+@dataclass
+class DocumentSubmittedForApproval(DomainEvent):
+    document_id: uuid.UUID
+    approval_id: uuid.UUID
+    workflow_id: uuid.UUID
+    submitted_by: uuid.UUID
+    approvers: List[uuid.UUID]
+    timestamp: datetime
+
+@dataclass
+class DocumentApproved(DomainEvent):
+    document_id: uuid.UUID
+    approval_id: uuid.UUID
+    approver_id: uuid.UUID
+    step_id: uuid.UUID
+    comment: str
+    timestamp: datetime
+
+@dataclass
+class DocumentRejected(DomainEvent):
+    document_id: uuid.UUID
+    approval_id: uuid.UUID
+    approver_id: uuid.UUID
+    step_id: uuid.UUID
+    comment: str
+    timestamp: datetime
+
+@dataclass
+class ApprovalStepCompleted(DomainEvent):
+    approval_id: uuid.UUID
+    step_id: uuid.UUID
+    next_step_id: Optional[uuid.UUID]
+    timestamp: datetime
+
+@dataclass
+class ApprovalTimeoutOccurred(DomainEvent):
+    approval_id: uuid.UUID
+    step_id: uuid.UUID
+    timeout_hours: int
+    escalation_required: bool
+    timestamp: datetime
+```
+
+#### 儲存庫介面
+
+**DocumentApprovalWorkflowRepository**
+
+```python
+class DocumentApprovalWorkflowRepository(ABC):
+    @abstractmethod
+    def save(self, workflow: DocumentApprovalWorkflow) -> DocumentApprovalWorkflow
+
+    @abstractmethod
+    def get_by_id(self, workflow_id: uuid.UUID) -> Optional[DocumentApprovalWorkflow]
+
+    @abstractmethod
+    def find_applicable_workflow(self, document: Document) -> Optional[DocumentApprovalWorkflow]
+
+    @abstractmethod
+    def list_active_workflows(self) -> List[DocumentApprovalWorkflow]
+```
+
+**DocumentApprovalRepository**
+
+```python
+class DocumentApprovalRepository(ABC):
+    @abstractmethod
+    def save(self, approval: DocumentApproval) -> DocumentApproval
+
+    @abstractmethod
+    def get_by_id(self, approval_id: uuid.UUID) -> Optional[DocumentApproval]
+
+    @abstractmethod
+    def get_by_document_id(self, document_id: uuid.UUID) -> Optional[DocumentApproval]
+
+    @abstractmethod
+    def find_pending_approvals_for_user(self, user_id: uuid.UUID) -> List[DocumentApproval]
+
+    @abstractmethod
+    def find_approvals_by_status(self, status: ApprovalStatus) -> List[DocumentApproval]
+```
+
+### 應用層組件
+
+#### 用例
+
+**SubmitDocumentForApprovalUseCase**
+
+```python
+class SubmitDocumentForApprovalUseCase:
+    def __init__(self, document_repo: DocumentRepository,
+                 approval_repo: DocumentApprovalRepository,
+                 workflow_repo: DocumentApprovalWorkflowRepository,
+                 event_publisher: EventPublisher):
+        self.document_repo = document_repo
+        self.approval_repo = approval_repo
+        self.workflow_repo = workflow_repo
+        self.event_publisher = event_publisher
+
+    def execute(self, document_id: uuid.UUID, submitted_by: uuid.UUID) -> DocumentApproval:
+        # Implementation logic
+        pass
+```
+
+**ProcessApprovalDecisionUseCase**
+
+```python
+class ProcessApprovalDecisionUseCase:
+    def execute(self, approval_id: uuid.UUID, approver_id: uuid.UUID,
+                action: ApprovalActionType, comment: str) -> DocumentApproval:
+        # Implementation logic
+        pass
+```
+
+**BatchApprovalUseCase**
+
+```python
+class BatchApprovalUseCase:
+    def execute(self, approval_ids: List[uuid.UUID], approver_id: uuid.UUID,
+                action: ApprovalActionType, comment: str) -> List[DocumentApproval]:
+        # Implementation logic
+        pass
+```
+
+#### 應用服務
+
+**DocumentApprovalService**
+
+```python
+class DocumentApprovalService:
+    def __init__(self, approval_repo: DocumentApprovalRepository,
+                 workflow_repo: DocumentApprovalWorkflowRepository,
+                 user_service: UserService,
+                 notification_service: NotificationService):
+        self.approval_repo = approval_repo
+        self.workflow_repo = workflow_repo
+        self.user_service = user_service
+        self.notification_service = notification_service
+
+    def submit_for_approval(self, document: Document, submitted_by: uuid.UUID) -> DocumentApproval
+    def process_approval_decision(self, approval: DocumentApproval, approver_id: uuid.UUID,
+                                 action: ApprovalActionType, comment: str) -> None
+    def check_and_handle_timeouts(self) -> None
+    def escalate_approval(self, approval: DocumentApproval, step: DocumentApprovalStep) -> None
+```
+
+### 基礎設施層組件
+
+#### 外部服務整合
+
+**UserManagementServiceClient**
+
+```python
+class UserManagementServiceClient:
+    async def get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]
+    async def get_users_by_role(self, role: str) -> List[User]
+    async def get_users_by_department(self, department_id: uuid.UUID) -> List[User]
+    async def get_user_manager(self, user_id: uuid.UUID) -> Optional[User]
+```
+
+**NotificationServiceClient**
+
+```python
+class NotificationServiceClient:
+    async def send_approval_notification(self, approver_ids: List[uuid.UUID],
+                                       document: Document, approval: DocumentApproval) -> None
+    async def send_batch_notifications(self, notifications: List[ApprovalNotification]) -> None
+    async def send_timeout_notification(self, approval: DocumentApproval,
+                                      escalated_approvers: List[uuid.UUID]) -> None
+```
+
+#### 資料庫模型
+
+**SQLAlchemy 模型**
+
+```python
+class DocumentApprovalWorkflowModel(Base):
     __tablename__ = "document_approval_workflows"
 
     id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), nullable=False)
+    name = Column(String(200), nullable=False)
     description = Column(Text)
-    category_id = Column(UUID, ForeignKey("categories.id"))  # 特定分類的審批流程
-    tag_ids = Column(JSONB)  # 特定標籤的審批流程
-    is_default = Column(Boolean, default=False)  # 是否為預設流程
+    category_criteria = Column(JSONB)
+    tag_criteria = Column(JSONB)
+    creator_criteria = Column(JSONB)
     is_active = Column(Boolean, default=True)
-    auto_approve_timeout = Column(Integer)  # 自動批准超時時間(小時)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-```
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-#### 2. DocumentApprovalStep (文檔審批步驟)
+    steps = relationship("DocumentApprovalStepModel", back_populates="workflow")
 
-```python
-class DocumentApprovalStep(Base):
-    """文檔審批步驟"""
-    __tablename__ = "document_approval_steps"
-
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    workflow_id = Column(UUID, ForeignKey("document_approval_workflows.id"))
-    name = Column(String(100), nullable=False)
-    description = Column(Text)
-    order = Column(Integer, nullable=False)
-    approver_type = Column(String(20), nullable=False)  # USER, ROLE, DEPARTMENT
-    approver_ids = Column(JSONB)  # 審批者ID列表
-    is_parallel = Column(Boolean, default=False)  # 是否並行審批
-    required_approvals = Column(Integer, default=1)  # 需要的批准數量
-    is_final = Column(Boolean, default=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-```
-
-#### 3. DocumentApproval (文檔審批記錄)
-
-```python
-class DocumentApproval(Base):
-    """文檔審批記錄"""
+class DocumentApprovalModel(Base):
     __tablename__ = "document_approvals"
 
     id = Column(UUID, primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID, ForeignKey("documents.id"), nullable=False)
-    workflow_id = Column(UUID, ForeignKey("document_approval_workflows.id"))
+    workflow_id = Column(UUID, ForeignKey("document_approval_workflows.id"), nullable=False)
     current_step_id = Column(UUID, ForeignKey("document_approval_steps.id"))
-    status = Column(String(20), nullable=False)  # PENDING, IN_REVIEW, APPROVED, REJECTED, REQUIRES_CHANGES
-    submitted_by = Column(UUID, ForeignKey("users.id"), nullable=False)
-    submitted_at = Column(DateTime, server_default=func.now())
+    status = Column(Enum(ApprovalStatus), nullable=False)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    submitted_by = Column(UUID, nullable=False)
+
+    document = relationship("DocumentModel", back_populates="approval")
+    workflow = relationship("DocumentApprovalWorkflowModel")
+    actions = relationship("DocumentApprovalActionModel", back_populates="approval")
 ```
 
-#### 4. DocumentApprovalAction (審批操作記錄)
+### 介面層組件
+
+#### REST API 控制器
+
+**DocumentApprovalController**
 
 ```python
-class DocumentApprovalAction(Base):
-    """審批操作記錄"""
-    __tablename__ = "document_approval_actions"
+@router.post("/documents/{document_id}/submit-approval")
+async def submit_document_for_approval(
+    document_id: uuid.UUID,
+    request: SubmitApprovalRequest,
+    use_case: SubmitDocumentForApprovalUseCase = Depends()
+) -> ApprovalResponse:
+    # Implementation
+    pass
 
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    approval_id = Column(UUID, ForeignKey("document_approvals.id"), nullable=False)
-    step_id = Column(UUID, ForeignKey("document_approval_steps.id"), nullable=False)
-    approver_id = Column(UUID, ForeignKey("users.id"), nullable=False)
-    action = Column(String(20), nullable=False)  # APPROVE, REJECT, REQUEST_CHANGES
-    comment = Column(Text)
-    created_at = Column(DateTime, server_default=func.now())
+@router.post("/approvals/{approval_id}/approve")
+async def approve_document(
+    approval_id: uuid.UUID,
+    request: ApprovalDecisionRequest,
+    use_case: ProcessApprovalDecisionUseCase = Depends()
+) -> ApprovalResponse:
+    # Implementation
+    pass
+
+@router.post("/approvals/batch-approve")
+async def batch_approve_documents(
+    request: BatchApprovalRequest,
+    use_case: BatchApprovalUseCase = Depends()
+) -> BatchApprovalResponse:
+    # Implementation
+    pass
 ```
 
-### 領域事件
+#### 事件處理器
 
-#### 事件定義
+**ApprovalEventHandlers**
 
 ```python
-class DocumentApprovalEvent(BaseEvent):
-    """文檔審批事件基類"""
-    document_id: UUID
-    approval_id: UUID
-    user_id: UUID
-    timestamp: datetime
+class ApprovalEventHandlers:
+    def __init__(self, notification_service: NotificationServiceClient,
+                 user_service: UserManagementServiceClient):
+        self.notification_service = notification_service
+        self.user_service = user_service
 
-class DocumentSubmittedForApproval(DocumentApprovalEvent):
-    """文檔提交審批事件"""
-    workflow_id: UUID
-    approver_ids: List[UUID]
+    async def handle_document_submitted_for_approval(self, event: DocumentSubmittedForApproval):
+        # Send notifications to approvers
+        pass
 
-class DocumentApproved(DocumentApprovalEvent):
-    """文檔批准事件"""
-    approver_id: UUID
-    step_id: UUID
-    comment: Optional[str]
+    async def handle_document_approved(self, event: DocumentApproved):
+        # Handle approval progression
+        pass
 
-class DocumentRejected(DocumentApprovalEvent):
-    """文檔拒絕事件"""
-    approver_id: UUID
-    step_id: UUID
-    reason: str
-
-class ApprovalStepCompleted(DocumentApprovalEvent):
-    """審批步驟完成事件"""
-    step_id: UUID
-    next_step_id: Optional[UUID]
-
-class ApprovalTimeoutOccurred(DocumentApprovalEvent):
-    """審批超時事件"""
-    step_id: UUID
-    timeout_duration: int
-    escalation_action: str
+    async def handle_approval_timeout(self, event: ApprovalTimeoutOccurred):
+        # Handle escalation
+        pass
 ```
 
-#### 事件發布器
+## 資料模型
 
-```python
-class DocumentApprovalEventPublisher:
-    """文檔審批事件發布器"""
+### 資料庫架構擴展
 
-    def __init__(self, message_broker: MessageBroker):
-        self.message_broker = message_broker
+審批工作流系統通過新表擴展現有資料庫架構：
 
-    async def publish_document_submitted(self, event: DocumentSubmittedForApproval):
-        """發布文檔提交審批事件"""
-        await self.message_broker.publish("document.approval.submitted", event)
+```sql
+-- Document Approval Workflows
+CREATE TABLE document_approval_workflows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    category_criteria JSONB,
+    tag_criteria JSONB,
+    creator_criteria JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
 
-    async def publish_document_approved(self, event: DocumentApproved):
-        """發布文檔批准事件"""
-        await self.message_broker.publish("document.approval.approved", event)
+-- Document Approval Steps
+CREATE TABLE document_approval_steps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_id UUID REFERENCES document_approval_workflows(id),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    step_order INTEGER NOT NULL,
+    approver_type VARCHAR(50) NOT NULL,
+    approver_criteria JSONB NOT NULL,
+    is_parallel BOOLEAN DEFAULT FALSE,
+    timeout_hours INTEGER,
+    auto_approve_on_timeout BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
-    async def publish_document_rejected(self, event: DocumentRejected):
-        """發布文檔拒絕事件"""
-        await self.message_broker.publish("document.approval.rejected", event)
+-- Document Approvals
+CREATE TABLE document_approvals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID REFERENCES documents(id),
+    workflow_id UUID REFERENCES document_approval_workflows(id),
+    current_step_id UUID REFERENCES document_approval_steps(id),
+    status VARCHAR(50) NOT NULL,
+    submitted_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    submitted_by UUID NOT NULL
+);
+
+-- Document Approval Actions
+CREATE TABLE document_approval_actions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    approval_id UUID REFERENCES document_approvals(id),
+    step_id UUID REFERENCES document_approval_steps(id),
+    approver_id UUID NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
-### 外部服務整合
-
-#### 用戶管理服務整合
-
-```python
-class UserManagementServiceClient:
-    """用戶管理服務客戶端"""
-
-    async def get_user_details(self, user_id: UUID) -> UserDetails:
-        """獲取用戶詳情"""
-
-    async def get_users_by_role(self, role: str) -> List[UserDetails]:
-        """根據角色獲取用戶列表"""
-
-    async def get_users_by_department(self, department_id: UUID) -> List[UserDetails]:
-        """根據部門獲取用戶列表"""
-
-    async def check_user_permissions(self, user_id: UUID, permission: str) -> bool:
-        """檢查用戶權限"""
-```
-
-#### 通知服務整合
-
-```python
-class NotificationServiceClient:
-    """通知服務客戶端"""
-
-    async def send_approval_notification(self,
-                                       recipient_ids: List[UUID],
-                                       document_id: UUID,
-                                       notification_type: str):
-        """發送審批通知"""
-
-    async def send_batch_notification(self, notifications: List[NotificationRequest]):
-        """批量發送通知"""
-```
-
-#### 工單系統整合
-
-```python
-class TicketSystemServiceClient:
-    """工單系統服務客戶端"""
-
-    async def get_workflow_template(self, template_id: UUID) -> WorkflowTemplate:
-        """獲取工作流模板"""
-
-    async def reuse_approval_logic(self, workflow_config: WorkflowConfig) -> WorkflowEngine:
-        """重用審批邏輯"""
-```
-
-### 服務接口
-
-#### DocumentApprovalService
-
-```python
-class DocumentApprovalService:
-    """文檔審批服務"""
-
-    def submit_for_approval(self, document_id: UUID, user_id: UUID) -> DocumentApproval:
-        """提交文檔進行審批"""
-
-    def approve_document(self, approval_id: UUID, step_id: UUID, approver_id: UUID, comment: str = None) -> bool:
-        """批准文檔"""
-
-    def reject_document(self, approval_id: UUID, step_id: UUID, approver_id: UUID, comment: str) -> bool:
-        """拒絕文檔"""
-
-    def request_changes(self, approval_id: UUID, step_id: UUID, approver_id: UUID, comment: str) -> bool:
-        """要求修改文檔"""
-
-    def get_pending_approvals(self, user_id: UUID) -> List[DocumentApproval]:
-        """獲取待審批文檔列表"""
-
-    def get_approval_history(self, document_id: UUID) -> List[DocumentApprovalAction]:
-        """獲取審批歷史"""
-
-    def batch_approve(self, approval_ids: List[UUID], approver_id: UUID, comment: str = None) -> Dict[UUID, bool]:
-        """批量批准"""
-```
-
-#### WorkflowConfigService
-
-```python
-class WorkflowConfigService:
-    """工作流配置服務"""
-
-    def create_workflow(self, workflow_data: DocumentApprovalWorkflowCreate) -> DocumentApprovalWorkflow:
-        """創建審批工作流"""
-
-    def add_approval_step(self, workflow_id: UUID, step_data: DocumentApprovalStepCreate) -> DocumentApprovalStep:
-        """添加審批步驟"""
-
-    def get_workflow_for_document(self, document: Document) -> Optional[DocumentApprovalWorkflow]:
-        """根據文檔獲取適用的工作流"""
-
-    def update_workflow(self, workflow_id: UUID, workflow_data: DocumentApprovalWorkflowUpdate) -> DocumentApprovalWorkflow:
-        """更新工作流配置"""
-```
-
-## Data Models
-
-### 數據庫關係圖
+### 實體關係
 
 ```mermaid
 erDiagram
-    documents ||--o{ document_approvals : has
-    document_approval_workflows ||--o{ document_approval_steps : contains
-    document_approval_workflows ||--o{ document_approvals : uses
-    document_approvals ||--o{ document_approval_actions : has
-    document_approval_steps ||--o{ document_approval_actions : belongs_to
-    users ||--o{ document_approvals : submits
-    users ||--o{ document_approval_actions : performs
-    categories ||--o{ document_approval_workflows : applies_to
+    Document ||--o| DocumentApproval : "has"
+    DocumentApprovalWorkflow ||--o{ DocumentApprovalStep : "contains"
+    DocumentApprovalWorkflow ||--o{ DocumentApproval : "defines"
+    DocumentApproval ||--o{ DocumentApprovalAction : "tracks"
+    DocumentApprovalStep ||--o{ DocumentApprovalAction : "receives"
 
-    documents {
+    Document {
         uuid id PK
         string title
         text content
-        uuid category_id FK
-        uuid creator_id FK
-        boolean is_published
-        datetime created_at
-        datetime updated_at
+        uuid category_id
+        uuid creator_id
+        string status
     }
 
-    document_approval_workflows {
+    DocumentApprovalWorkflow {
         uuid id PK
         string name
         text description
-        uuid category_id FK
-        jsonb tag_ids
-        boolean is_default
+        jsonb category_criteria
+        jsonb tag_criteria
         boolean is_active
-        integer auto_approve_timeout
-        datetime created_at
-        datetime updated_at
     }
 
-    document_approval_steps {
+    DocumentApprovalStep {
         uuid id PK
         uuid workflow_id FK
         string name
-        text description
-        integer order
+        integer step_order
         string approver_type
-        jsonb approver_ids
+        jsonb approver_criteria
         boolean is_parallel
-        integer required_approvals
-        boolean is_final
-        datetime created_at
-        datetime updated_at
+        integer timeout_hours
     }
 
-    document_approvals {
+    DocumentApproval {
         uuid id PK
         uuid document_id FK
         uuid workflow_id FK
         uuid current_step_id FK
         string status
-        uuid submitted_by FK
         datetime submitted_at
         datetime completed_at
-        datetime created_at
-        datetime updated_at
+        uuid submitted_by
     }
 
-    document_approval_actions {
+    DocumentApprovalAction {
         uuid id PK
         uuid approval_id FK
         uuid step_id FK
-        uuid approver_id FK
-        string action
+        uuid approver_id
+        string action_type
         text comment
         datetime created_at
     }
 ```
 
-### 狀態枚舉
+## 錯誤處理
+
+### 領域層錯誤處理
+
+**自定義異常**
 
 ```python
-class ApprovalStatus(str, Enum):
-    PENDING = "PENDING"           # 待審批
-    IN_REVIEW = "IN_REVIEW"       # 審核中
-    APPROVED = "APPROVED"         # 已批准
-    REJECTED = "REJECTED"         # 已拒絕
-    REQUIRES_CHANGES = "REQUIRES_CHANGES"  # 要求修改
-
-class ApprovalAction(str, Enum):
-    APPROVE = "APPROVE"           # 批准
-    REJECT = "REJECT"             # 拒絕
-    REQUEST_CHANGES = "REQUEST_CHANGES"  # 要求修改
-
-class ApproverType(str, Enum):
-    USER = "USER"                 # 指定用戶
-    ROLE = "ROLE"                 # 指定角色
-    DEPARTMENT = "DEPARTMENT"     # 指定部門
-```
-
-## Error Handling
-
-### 異常類型定義
-
-```python
-class DocumentApprovalException(Exception):
-    """文檔審批異常基類"""
+class ApprovalWorkflowError(Exception):
+    """Base exception for approval workflow errors"""
     pass
 
-class WorkflowNotFoundException(DocumentApprovalException):
-    """工作流未找到異常"""
+class WorkflowNotFoundError(ApprovalWorkflowError):
+    """Raised when no applicable workflow is found"""
     pass
 
-class InvalidApprovalStateException(DocumentApprovalException):
-    """無效審批狀態異常"""
+class InvalidApprovalStateError(ApprovalWorkflowError):
+    """Raised when approval action is invalid for current state"""
     pass
 
-class UnauthorizedApprovalException(DocumentApprovalException):
-    """未授權審批異常"""
+class UnauthorizedApproverError(ApprovalWorkflowError):
+    """Raised when user is not authorized to approve"""
     pass
 
-class ApprovalTimeoutException(DocumentApprovalException):
-    """審批超時異常"""
+class ApprovalTimeoutError(ApprovalWorkflowError):
+    """Raised when approval step times out"""
     pass
 ```
 
-### 錯誤處理策略
+### 應用層錯誤處理
 
-1. **業務邏輯錯誤**: 返回具體的錯誤信息和建議操作
-2. **權限錯誤**: 記錄安全日誌並返回標準化錯誤信息
-3. **系統錯誤**: 記錄詳細錯誤日誌，返回用戶友好的錯誤信息
-4. **超時處理**: 自動觸發升級或自動批准機制
-
-### HTTP 狀態碼映射
-
-- `400 Bad Request`: 無效的審批操作或狀態
-- `401 Unauthorized`: 未登入用戶
-- `403 Forbidden`: 無審批權限
-- `404 Not Found`: 文檔或審批記錄不存在
-- `409 Conflict`: 審批狀態衝突
-- `422 Unprocessable Entity`: 數據驗證失敗
-
-## Testing Strategy
-
-### 單元測試
-
-1. **服務層測試**
-
-   - 審批流程邏輯測試
-   - 權限驗證測試
-   - 狀態轉換測試
-   - 超時處理測試
-
-2. **模型層測試**
-   - 數據模型驗證測試
-   - 關聯關係測試
-   - 約束條件測試
-
-### 整合測試
-
-1. **API 端點測試**
-
-   - 審批提交流程測試
-   - 批量操作測試
-   - 權限控制測試
-
-2. **數據庫整合測試**
-   - 事務處理測試
-   - 併發操作測試
-   - 數據一致性測試
-
-### 端到端測試
-
-1. **完整審批流程測試**
-
-   - 單階段審批流程
-   - 多階段審批流程
-   - 並行審批流程
-
-2. **異常情況測試**
-   - 審批超時處理
-   - 審批者不可用情況
-   - 工作流配置變更影響
-
-### 性能測試
-
-1. **負載測試**
-
-   - 大量文檔同時提交審批
-   - 批量審批操作性能
-   - 審批歷史查詢性能
-
-2. **壓力測試**
-   - 高併發審批操作
-   - 大量通知發送
-   - 數據庫連接池壓力
-
-### 測試數據準備
+**錯誤回應模型**
 
 ```python
-@pytest.fixture
-def sample_workflow():
-    """創建測試用的審批工作流"""
-    return DocumentApprovalWorkflow(
-        name="標準文檔審批流程",
-        description="適用於一般文檔的審批流程",
-        is_default=True,
-        auto_approve_timeout=72
-    )
+@dataclass
+class ErrorResponse:
+    error_code: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime = field(default_factory=datetime.utcnow)
 
-@pytest.fixture
-def sample_approval_steps():
-    """創建測試用的審批步驟"""
-    return [
-        DocumentApprovalStep(
-            name="部門主管審批",
-            order=1,
-            approver_type=ApproverType.ROLE,
-            approver_ids=["department_manager"],
-            required_approvals=1
-        ),
-        DocumentApprovalStep(
-            name="內容專家審批",
-            order=2,
-            approver_type=ApproverType.USER,
-            approver_ids=["expert_user_id"],
-            required_approvals=1,
-            is_final=True
+class ApprovalErrorHandler:
+    def handle_workflow_error(self, error: ApprovalWorkflowError) -> ErrorResponse:
+        # Map domain errors to appropriate HTTP responses
+        pass
+
+    def handle_validation_error(self, error: ValidationError) -> ErrorResponse:
+        # Handle input validation errors
+        pass
+```
+
+### 基礎設施層錯誤處理
+
+**斷路器模式**
+
+```python
+class CircuitBreakerUserService:
+    def __init__(self, user_service: UserManagementServiceClient):
+        self.user_service = user_service
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=30,
+            expected_exception=ServiceUnavailableError
         )
-    ]
+
+    async def get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:
+        return await self.circuit_breaker.call(
+            self.user_service.get_user_by_id, user_id
+        )
 ```
 
-### 測試覆蓋率目標
+## 測試策略
 
-- **單元測試覆蓋率**: ≥ 90%
-- **整合測試覆蓋率**: ≥ 80%
-- **API 端點覆蓋率**: 100%
-- **關鍵業務邏輯覆蓋率**: 100%
+### 單元測試策略
+
+**領域實體測試**
+
+```python
+class TestDocumentApproval:
+    def test_submit_for_approval_creates_correct_events(self):
+        # Test that submitting for approval creates appropriate domain events
+        pass
+
+    def test_approve_step_progresses_workflow(self):
+        # Test that approving a step progresses to next step
+        pass
+
+    def test_reject_sets_correct_status(self):
+        # Test that rejection sets approval to rejected status
+        pass
+```
+
+**用例測試**
+
+```python
+class TestSubmitDocumentForApprovalUseCase:
+    def test_submit_with_valid_workflow_succeeds(self):
+        # Test successful submission with mock dependencies
+        pass
+
+    def test_submit_without_workflow_raises_error(self):
+        # Test error handling when no workflow found
+        pass
+```
+
+### 整合測試策略
+
+**儲存庫整合測試**
+
+```python
+class TestDocumentApprovalRepository:
+    def test_save_and_retrieve_approval(self, db_session):
+        # Test database persistence and retrieval
+        pass
+
+    def test_find_pending_approvals_for_user(self, db_session):
+        # Test complex queries with proper filtering
+        pass
+```
+
+**API 整合測試**
+
+```python
+class TestDocumentApprovalAPI:
+    def test_submit_approval_endpoint(self, client, auth_headers):
+        # Test complete API flow with authentication
+        pass
+
+    def test_batch_approval_endpoint(self, client, auth_headers):
+        # Test batch operations through API
+        pass
+```
+
+### 端到端測試策略
+
+**工作流測試**
+
+```python
+class TestApprovalWorkflowE2E:
+    def test_complete_approval_workflow(self, app, db_session):
+        # Test complete workflow from submission to approval
+        pass
+
+    def test_timeout_and_escalation_flow(self, app, db_session):
+        # Test timeout handling and escalation
+        pass
+```
+
+## 性能考量
+
+### 資料庫優化
+
+**索引策略**
+
+```sql
+-- Indexes for common queries
+CREATE INDEX idx_document_approvals_status ON document_approvals(status);
+CREATE INDEX idx_document_approvals_submitted_at ON document_approvals(submitted_at);
+CREATE INDEX idx_document_approval_actions_approver_id ON document_approval_actions(approver_id);
+CREATE INDEX idx_document_approval_actions_created_at ON document_approval_actions(created_at);
+
+-- Composite indexes for complex queries
+CREATE INDEX idx_approvals_status_current_step ON document_approvals(status, current_step_id);
+CREATE INDEX idx_actions_approval_step ON document_approval_actions(approval_id, step_id);
+```
+
+**查詢優化**
+
+```python
+class OptimizedDocumentApprovalRepository:
+    def find_pending_approvals_for_user_optimized(self, user_id: uuid.UUID) -> List[DocumentApproval]:
+        # Use optimized queries with proper joins and filtering
+        query = (
+            self.session.query(DocumentApprovalModel)
+            .join(DocumentApprovalStepModel)
+            .filter(
+                DocumentApprovalModel.status == ApprovalStatus.IN_PROGRESS,
+                DocumentApprovalStepModel.approver_criteria.contains({"user_id": str(user_id)})
+            )
+            .options(selectinload(DocumentApprovalModel.document))
+        )
+        return query.all()
+```
+
+### 快取策略
+
+**Redis 快取**
+
+```python
+class CachedWorkflowService:
+    def __init__(self, workflow_repo: DocumentApprovalWorkflowRepository,
+                 redis_client: Redis):
+        self.workflow_repo = workflow_repo
+        self.redis_client = redis_client
+
+    async def get_applicable_workflow(self, document: Document) -> Optional[DocumentApprovalWorkflow]:
+        cache_key = f"workflow:document:{document.category_id}:{hash(tuple(document.tags))}"
+        cached_workflow = await self.redis_client.get(cache_key)
+
+        if cached_workflow:
+            return DocumentApprovalWorkflow.from_json(cached_workflow)
+
+        workflow = self.workflow_repo.find_applicable_workflow(document)
+        if workflow:
+            await self.redis_client.setex(
+                cache_key, 3600, workflow.to_json()
+            )
+
+        return workflow
+```
+
+### 異步處理
+
+**背景任務處理**
+
+```python
+class ApprovalTimeoutProcessor:
+    def __init__(self, approval_service: DocumentApprovalService,
+                 task_queue: TaskQueue):
+        self.approval_service = approval_service
+        self.task_queue = task_queue
+
+    async def schedule_timeout_check(self, approval_id: uuid.UUID, timeout_hours: int):
+        await self.task_queue.schedule_task(
+            task_name="check_approval_timeout",
+            payload={"approval_id": str(approval_id)},
+            delay_seconds=timeout_hours * 3600
+        )
+
+    async def process_timeout_check(self, approval_id: uuid.UUID):
+        await self.approval_service.check_and_handle_timeout(approval_id)
+```
+
+此設計為實施文檔審批工作流系統提供了全面的基礎，同時與現有的乾淨架構和事件驅動模式保持一致。該設計強調可擴展性、可維護性和可測試性，同時提供強大的審批功能。

@@ -1,326 +1,327 @@
-# Implementation Plan
+# 實施計劃
 
-- [ ] 1. Set up project structure and core interfaces
+- [x] 1. 建立專案結構和核心介面
 
-  - Create directory structure for document approval service following clean architecture
-  - Define domain entity interfaces and repository contracts
-  - Set up basic FastAPI application structure with dependency injection
-  - _Requirements: 9.1, 9.6_
+  - 遵循乾淨架構創建文檔審批服務的目錄結構
+  - 定義領域實體介面和儲存庫契約
+  - 建立基本的 FastAPI 應用程式結構與依賴注入
+  - _需求: 9.1, 9.6_
 
-- [ ] 2. Implement domain entities and value objects
+- [ ] 2. 實施領域實體和值物件
 
-  - [ ] 2.1 Create DocumentApprovalWorkflow entity with business logic
+  - [ ] 2.1 創建具有業務邏輯的 DocumentApprovalWorkflow 實體
 
-    - Implement workflow validation rules and state management
-    - Add methods for determining applicable workflows based on document properties
-    - Write unit tests for workflow entity behavior
-    - _Requirements: 3.1, 3.2, 3.4_
+    - 實施工作流驗證規則和狀態管理
+    - 添加基於文檔屬性確定適用工作流的方法
+    - 為工作流實體行為編寫單元測試
+    - _需求: 3.1, 3.2, 3.4_
 
-  - [ ] 2.2 Create DocumentApprovalStep entity with approval logic
+  - [ ] 2.2 創建具有審批邏輯的 DocumentApprovalStep 實體
 
-    - Implement step ordering and approver resolution logic
-    - Add support for parallel and sequential approval steps
-    - Write unit tests for step progression and approver validation
-    - _Requirements: 3.1, 3.3_
+    - 實施步驟排序和審批者解析邏輯
+    - 添加對並行和順序審批步驟的支援
+    - 為步驟進展和審批者驗證編寫單元測試
+    - _需求: 3.1, 3.3_
 
-  - [ ] 2.3 Create DocumentApproval entity with state transitions
+  - [ ] 2.3 創建具有狀態轉換的 DocumentApproval 實體
 
-    - Implement approval state machine with valid transitions
-    - Add business rules for approval progression and completion
-    - Write unit tests for state transition validation
-    - _Requirements: 1.2, 2.2, 2.5, 6.3_
+    - 實施具有有效轉換的審批狀態機
+    - 添加審批進展和完成的業務規則
+    - 為狀態轉換驗證編寫單元測試
+    - _需求: 1.2, 2.2, 2.5, 6.3_
 
-  - [ ] 2.4 Create DocumentApprovalAction entity for audit trail
-    - Implement action recording with approver details and timestamps
-    - Add validation for action types and required comments
-    - Write unit tests for action creation and validation
-    - _Requirements: 2.3, 4.4, 8.1, 8.2_
+  - [ ] 2.4 創建用於稽核軌跡的 DocumentApprovalAction 實體
+    - 實施包含審批者詳情和時間戳的行為記錄
+    - 添加行為類型和必需評論的驗證
+    - 為行為創建和驗證編寫單元測試
+    - _需求: 2.3, 4.4, 8.1, 8.2_
 
-- [ ] 3. Implement domain events and event publishing
+- [ ] 3. 實施領域事件和事件發布
 
-  - [ ] 3.1 Create domain event classes for approval workflow
+  - [ ] 3.1 為審批工作流創建領域事件類別
 
-    - Define DocumentSubmittedForApproval, DocumentApproved, DocumentRejected events
-    - Implement ApprovalStepCompleted and ApprovalTimeoutOccurred events
-    - Add event serialization and validation
-    - _Requirements: 9.1, 10.1_
+    - 定義 DocumentSubmittedForApproval、DocumentApproved、DocumentRejected 事件
+    - 實施 ApprovalStepCompleted 和 ApprovalTimeoutOccurred 事件
+    - 添加事件序列化和驗證
+    - _需求: 9.1, 10.1_
 
-  - [ ] 3.2 Implement event publisher infrastructure
-    - Create async event publisher with Kafka integration
-    - Add event publishing to domain entity methods
-    - Implement event retry and error handling mechanisms
-    - Write unit tests for event publishing
-    - _Requirements: 9.1, 9.5_
+  - [ ] 3.2 實施事件發布者基礎設施
+    - 創建具有 Kafka 整合的異步事件發布者
+    - 將事件發布添加到領域實體方法中
+    - 實施事件重試和錯誤處理機制
+    - 為事件發布編寫單元測試
+    - _需求: 9.1, 9.5_
 
-- [ ] 4. Create database models and repositories
+- [ ] 4. 創建資料庫模型和儲存庫
 
-  - [ ] 4.1 Implement SQLAlchemy models for approval workflow
+  - [ ] 4.1 為審批工作流實施 SQLAlchemy 模型
 
-    - Create database models matching domain entities
-    - Define proper foreign key relationships and constraints
-    - Add database indexes for performance optimization
-    - _Requirements: 3.1, 3.2, 3.3_
+    - 創建與領域實體匹配的資料庫模型
+    - 定義適當的外鍵關係和約束
+    - 添加資料庫索引以優化性能
+    - _需求: 3.1, 3.2, 3.3_
 
-  - [ ] 4.2 Implement repository pattern for data access
+  - [ ] 4.2 實施資料存取的儲存庫模式
 
-    - Create DocumentApprovalWorkflowRepository with CRUD operations
-    - Implement DocumentApprovalRepository with status filtering
-    - Add DocumentApprovalActionRepository for audit queries
-    - Write integration tests for repository operations
-    - _Requirements: 4.1, 4.2, 8.1, 8.2_
+    - 創建具有 CRUD 操作的 DocumentApprovalWorkflowRepository
+    - 實施具有狀態篩選的 DocumentApprovalRepository
+    - 添加用於稽核查詢的 DocumentApprovalActionRepository
+    - 為儲存庫操作編寫整合測試
+    - _需求: 4.1, 4.2, 8.1, 8.2_
 
-  - [ ] 4.3 Create database migrations
-    - Generate Alembic migrations for all approval workflow tables
-    - Add proper indexes and constraints for performance and data integrity
-    - Test migration rollback scenarios
-    - _Requirements: 3.4, 8.4_
+  - [ ] 4.3 創建資料庫遷移
 
-- [ ] 5. Implement external service integrations
+    - 為所有審批工作流表生成 Alembic 遷移
+    - 添加適當的索引和約束以確保性能和資料完整性
+    - 測試遷移回滾場景
+    - _需求: 3.4, 8.4_
 
-  - [ ] 5.1 Create user management service client
+- [ ] 5. 實施外部服務整合
 
-    - Implement async client for user details and permissions
-    - Add support for role-based and department-based approver resolution
-    - Implement circuit breaker pattern for service resilience
-    - Write integration tests with mock service responses
-    - _Requirements: 9.2, 9.5, 3.3_
+  - [ ] 5.1 創建用戶管理服務客戶端
 
-  - [ ] 5.2 Create notification service client
+    - 實施用於用戶詳情和權限的異步客戶端
+    - 添加對基於角色和部門的審批者解析支援
+    - 實施斷路器模式以提高服務韌性
+    - 使用模擬服務回應編寫整合測試
+    - _需求: 9.2, 9.5, 3.3_
 
-    - Implement async client for sending approval notifications
-    - Add support for batch notification sending
-    - Implement retry logic and error handling
-    - Write integration tests for notification scenarios
-    - _Requirements: 9.3, 1.2, 2.4, 5.3_
+  - [ ] 5.2 創建通知服務客戶端
 
-  - [ ] 5.3 Create ticket system service integration
-    - Implement client for reusing existing workflow engine components
-    - Add support for workflow template retrieval and adaptation
-    - Write integration tests for workflow reuse scenarios
-    - _Requirements: 9.4_
+    - 實施用於發送審批通知的異步客戶端
+    - 添加對批量通知發送的支援
+    - 實施重試邏輯和錯誤處理
+    - 為通知場景編寫整合測試
+    - _需求: 9.3, 1.2, 2.4, 5.3_
 
-- [ ] 6. Implement core application services
+  - [ ] 5.3 創建工單系統服務整合
+    - 實施用於重用現有工作流引擎組件的客戶端
+    - 添加對工作流模板檢索和適配的支援
+    - 為工作流重用場景編寫整合測試
+    - _需求: 9.4_
+
+- [ ] 6. 實施核心應用服務
 
-  - [ ] 6.1 Create DocumentApprovalService with submission logic
+  - [ ] 6.1 創建具有提交邏輯的 DocumentApprovalService
 
-    - Implement document submission for approval with workflow selection
-    - Add validation for user permissions and document state
-    - Implement automatic approver notification
-    - Write unit tests for submission scenarios
-    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+    - 實施具有工作流選擇的文檔審批提交
+    - 添加用戶權限和文檔狀態的驗證
+    - 實施自動審批者通知
+    - 為提交場景編寫單元測試
+    - _需求: 1.1, 1.2, 1.3, 1.4_
 
-  - [ ] 6.2 Implement approval decision processing
-
-    - Create methods for approve, reject, and request changes operations
-    - Add validation for approver authorization and current step
-    - Implement automatic workflow progression logic
-    - Write unit tests for all approval decision paths
-    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
-
-  - [ ] 6.3 Add batch approval processing capabilities
-
-    - Implement batch approve and batch reject operations
-    - Add transaction handling for batch operations
-    - Implement detailed error reporting for failed operations
-    - Write unit tests for batch processing scenarios
-    - _Requirements: 5.1, 5.2, 5.3, 5.4_
-
-  - [ ] 6.4 Implement document modification during approval
-    - Add support for document editing in "requires changes" state
-    - Implement approval workflow reset on document resubmission
-    - Add version tracking for document changes during approval
-    - Write unit tests for modification and resubmission flows
-    - _Requirements: 6.1, 6.2, 6.3, 6.4_
-
-- [ ] 7. Create workflow configuration service
-
-  - [ ] 7.1 Implement workflow creation and management
-
-    - Create WorkflowConfigService for workflow CRUD operations
-    - Add support for category and tag-based workflow assignment
-    - Implement workflow validation and activation logic
-    - Write unit tests for workflow configuration scenarios
-    - _Requirements: 3.1, 3.2, 3.4_
-
-  - [ ] 7.2 Add approval step configuration
-
-    - Implement step creation with approver type and parallel processing support
-    - Add step ordering and dependency validation
-    - Implement step modification with impact analysis
-    - Write unit tests for step configuration scenarios
-    - _Requirements: 3.1, 3.3_
-
-  - [ ] 7.3 Implement workflow selection logic
-    - Create algorithm for selecting appropriate workflow for documents
-    - Add support for default workflow fallback
-    - Implement workflow precedence rules for overlapping criteria
-    - Write unit tests for workflow selection scenarios
-    - _Requirements: 3.2, 3.4_
-
-- [ ] 8. Implement timeout and escalation handling
-
-  - [ ] 8.1 Create timeout monitoring service
-
-    - Implement background task for monitoring approval timeouts
-    - Add configurable timeout thresholds per workflow step
-    - Create timeout event publishing for escalation
-    - Write unit tests for timeout detection logic
-    - _Requirements: 7.1, 7.4_
-
-  - [ ] 8.2 Add escalation and auto-approval logic
-    - Implement escalation to higher-level approvers on timeout
-    - Add auto-approval for low-risk documents after timeout
-    - Create escalation notification system
-    - Write unit tests for escalation scenarios
-    - _Requirements: 7.2, 7.3, 7.4_
-
-- [ ] 9. Create REST API endpoints
-
-  - [ ] 9.1 Implement document submission endpoints
-
-    - Create POST /documents/{id}/submit-approval endpoint
-    - Add request validation and response schemas
-    - Implement proper error handling and status codes
-    - Write API integration tests for submission flows
-    - _Requirements: 1.1, 1.2, 1.3, 1.4_
-
-  - [ ] 9.2 Create approval decision endpoints
-
-    - Implement POST /approvals/{id}/approve endpoint
-    - Create POST /approvals/{id}/reject endpoint
-    - Add POST /approvals/{id}/request-changes endpoint
-    - Write API integration tests for all decision endpoints
-    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
-
-  - [ ] 9.3 Add approval tracking endpoints
-
-    - Create GET /approvals/pending endpoint for approver dashboard
-    - Implement GET /documents/{id}/approval-status endpoint
-    - Add GET /documents/{id}/approval-history endpoint
-    - Write API integration tests for tracking endpoints
-    - _Requirements: 4.1, 4.2, 4.3, 4.4_
-
-  - [ ] 9.4 Implement batch operation endpoints
-
-    - Create POST /approvals/batch-approve endpoint
-    - Add POST /approvals/batch-reject endpoint
-    - Implement proper transaction handling and error reporting
-    - Write API integration tests for batch operations
-    - _Requirements: 5.1, 5.2, 5.3, 5.4_
-
-  - [ ] 9.5 Create workflow configuration endpoints
-    - Implement CRUD endpoints for workflow management
-    - Add endpoints for approval step configuration
-    - Create workflow assignment and activation endpoints
-    - Write API integration tests for configuration scenarios
-    - _Requirements: 3.1, 3.2, 3.3, 3.4_
-
-- [ ] 10. Implement audit and reporting features
-
-  - [ ] 10.1 Create audit trail service
-
-    - Implement comprehensive logging for all approval actions
-    - Add structured logging with user ID, document ID, and timestamps
-    - Create audit query service with filtering capabilities
-    - Write unit tests for audit trail functionality
-    - _Requirements: 8.1, 8.2, 8.4, 10.1_
-
-  - [ ] 10.2 Add reporting and export functionality
-    - Implement approval report generation with filtering
-    - Add Excel and PDF export capabilities
-    - Create report scheduling and delivery system
-    - Write integration tests for report generation
-    - _Requirements: 8.1, 8.2, 8.3_
-
-- [ ] 11. Add monitoring and observability
-
-  - [ ] 11.1 Implement application metrics
-
-    - Add metrics for approval processing times and throughput
-    - Create health check endpoints for service monitoring
-    - Implement custom metrics for business KPIs
-    - Write tests for metrics collection
-    - _Requirements: 10.2, 10.3_
-
-  - [ ] 11.2 Add structured logging and alerting
-    - Implement structured logging for all critical operations
-    - Add error logging with proper context and stack traces
-    - Create alerting rules for system anomalies
-    - Write tests for logging functionality
-    - _Requirements: 10.1, 10.2, 10.4_
-
-- [ ] 12. Create comprehensive test suite
-
-  - [ ] 12.1 Write unit tests for all domain logic
-
-    - Create tests for entity behavior and business rules
-    - Add tests for service layer operations
-    - Implement tests for event publishing and handling
-    - Achieve 90%+ code coverage for critical paths
-    - _Requirements: All requirements validation_
-
-  - [ ] 12.2 Implement integration tests
-
-    - Create database integration tests for repositories
-    - Add API endpoint integration tests
-    - Implement external service integration tests with mocks
-    - Test error handling and edge cases
-    - _Requirements: All requirements validation_
-
-  - [ ] 12.3 Add end-to-end workflow tests
-    - Create complete approval workflow test scenarios
-    - Test multi-stage approval processes
-    - Add parallel approval and batch operation tests
-    - Implement timeout and escalation test scenarios
-    - _Requirements: All requirements validation_
-
-- [ ] 13. Performance optimization and caching
-
-  - [ ] 13.1 Implement caching strategy
-
-    - Add Redis caching for frequently accessed workflow configurations
-    - Implement user permission caching with TTL
-    - Create cache invalidation strategy for configuration changes
-    - Write tests for caching behavior
-    - _Requirements: 9.6, 10.3_
-
-  - [ ] 13.2 Add database query optimization
-    - Optimize queries for approval dashboard and history views
-    - Add proper database indexes for performance
-    - Implement query result pagination for large datasets
-    - Write performance tests for critical queries
-    - _Requirements: 4.1, 4.2, 8.1, 8.2_
-
-- [ ] 14. Security and authorization
-
-  - [ ] 14.1 Implement role-based access control
-
-    - Add authorization middleware for API endpoints
-    - Implement approver permission validation
-    - Create admin-only endpoints for workflow configuration
-    - Write security tests for authorization scenarios
-    - _Requirements: 2.1, 3.1, 3.3_
-
-  - [ ] 14.2 Add audit logging for security events
-    - Implement security event logging for unauthorized access attempts
-    - Add logging for permission changes and escalations
-    - Create security monitoring and alerting
-    - Write tests for security logging
-    - _Requirements: 8.4, 10.1, 10.2_
-
-- [ ] 15. Documentation and deployment preparation
-
-  - [ ] 15.1 Create API documentation
-
-    - Generate OpenAPI/Swagger documentation for all endpoints
-    - Add example requests and responses
-    - Create integration guide for external services
-    - Write deployment and configuration documentation
-    - _Requirements: 9.1, 9.2, 9.3_
-
-  - [ ] 15.2 Prepare deployment configuration
-    - Create Docker configuration for containerized deployment
-    - Add environment-specific configuration files
-    - Implement graceful shutdown handling
-    - Create deployment scripts and health checks
-    - _Requirements: 10.4, 9.6_
+  - [ ] 6.2 實施審批決定處理
+
+    - 創建批准、拒絕和要求修改操作的方法
+    - 添加審批者授權和當前步驟的驗證
+    - 實施自動工作流進展邏輯
+    - 為所有審批決定路徑編寫單元測試
+    - _需求: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+  - [ ] 6.3 添加批量審批處理功能
+
+    - 實施批量批准和批量拒絕操作
+    - 為批量操作添加事務處理
+    - 為失敗操作實施詳細錯誤報告
+    - 為批量處理場景編寫單元測試
+    - _需求: 5.1, 5.2, 5.3, 5.4_
+
+  - [ ] 6.4 實施審批期間的文檔修改
+    - 添加對「需要修改」狀態下文檔編輯的支援
+    - 實施文檔重新提交時的審批工作流重置
+    - 為審批期間的文檔變更添加版本追蹤
+    - 為修改和重新提交流程編寫單元測試
+    - _需求: 6.1, 6.2, 6.3, 6.4_
+
+- [ ] 7. 創建工作流配置服務
+
+  - [ ] 7.1 實施工作流創建和管理
+
+    - 創建用於工作流 CRUD 操作的 WorkflowConfigService
+    - 添加對基於類別和標籤的工作流分配支援
+    - 實施工作流驗證和啟用邏輯
+    - 為工作流配置場景編寫單元測試
+    - _需求: 3.1, 3.2, 3.4_
+
+  - [ ] 7.2 添加審批步驟配置
+
+    - 實施具有審批者類型和並行處理支援的步驟創建
+    - 添加步驟排序和依賴驗證
+    - 實施具有影響分析的步驟修改
+    - 為步驟配置場景編寫單元測試
+    - _需求: 3.1, 3.3_
+
+  - [ ] 7.3 實施工作流選擇邏輯
+    - 創建為文檔選擇適當工作流的演算法
+    - 添加對預設工作流回退的支援
+    - 實施重疊條件的工作流優先級規則
+    - 為工作流選擇場景編寫單元測試
+    - _需求: 3.2, 3.4_
+
+- [ ] 8. 實施超時和升級處理
+
+  - [ ] 8.1 創建超時監控服務
+
+    - 實施用於監控審批超時的背景任務
+    - 為每個工作流步驟添加可配置的超時閾值
+    - 創建用於升級的超時事件發布
+    - 為超時檢測邏輯編寫單元測試
+    - _需求: 7.1, 7.4_
+
+  - [ ] 8.2 添加升級和自動批准邏輯
+    - 實施超時時向更高級別審批者的升級
+    - 為低風險文檔在超時後添加自動批准
+    - 創建升級通知系統
+    - 為升級場景編寫單元測試
+    - _需求: 7.2, 7.3, 7.4_
+
+- [ ] 9. 創建 REST API 端點
+
+  - [ ] 9.1 實施文檔提交端點
+
+    - 創建 POST /documents/{id}/submit-approval 端點
+    - 添加請求驗證和回應架構
+    - 實施適當的錯誤處理和狀態碼
+    - 為提交流程編寫 API 整合測試
+    - _需求: 1.1, 1.2, 1.3, 1.4_
+
+  - [ ] 9.2 創建審批決定端點
+
+    - 實施 POST /approvals/{id}/approve 端點
+    - 創建 POST /approvals/{id}/reject 端點
+    - 添加 POST /approvals/{id}/request-changes 端點
+    - 為所有決定端點編寫 API 整合測試
+    - _需求: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+  - [ ] 9.3 添加審批追蹤端點
+
+    - 為審批者儀表板創建 GET /approvals/pending 端點
+    - 實施 GET /documents/{id}/approval-status 端點
+    - 添加 GET /documents/{id}/approval-history 端點
+    - 為追蹤端點編寫 API 整合測試
+    - _需求: 4.1, 4.2, 4.3, 4.4_
+
+  - [ ] 9.4 實施批量操作端點
+
+    - 創建 POST /approvals/batch-approve 端點
+    - 添加 POST /approvals/batch-reject 端點
+    - 實施適當的事務處理和錯誤報告
+    - 為批量操作編寫 API 整合測試
+    - _需求: 5.1, 5.2, 5.3, 5.4_
+
+  - [ ] 9.5 創建工作流配置端點
+    - 實施用於工作流管理的 CRUD 端點
+    - 添加用於審批步驟配置的端點
+    - 創建工作流分配和啟用端點
+    - 為配置場景編寫 API 整合測試
+    - _需求: 3.1, 3.2, 3.3, 3.4_
+
+- [ ] 10. 實施稽核和報告功能
+
+  - [ ] 10.1 創建稽核軌跡服務
+
+    - 為所有審批行為實施全面日誌記錄
+    - 添加包含用戶 ID、文檔 ID 和時間戳的結構化日誌記錄
+    - 創建具有篩選功能的稽核查詢服務
+    - 為稽核軌跡功能編寫單元測試
+    - _需求: 8.1, 8.2, 8.4, 10.1_
+
+  - [ ] 10.2 添加報告和導出功能
+    - 實施具有篩選功能的審批報告生成
+    - 添加 Excel 和 PDF 導出功能
+    - 創建報告排程和交付系統
+    - 為報告生成編寫整合測試
+    - _需求: 8.1, 8.2, 8.3_
+
+- [ ] 11. 添加監控和可觀測性
+
+  - [ ] 11.1 實施應用程式指標
+
+    - 為審批處理時間和吞吐量添加指標
+    - 創建用於服務監控的健康檢查端點
+    - 實施業務 KPI 的自定義指標
+    - 為指標收集編寫測試
+    - _需求: 10.2, 10.3_
+
+  - [ ] 11.2 添加結構化日誌記錄和警報
+    - 為所有關鍵操作實施結構化日誌記錄
+    - 添加具有適當上下文和堆疊追蹤的錯誤日誌記錄
+    - 為系統異常創建警報規則
+    - 為日誌記錄功能編寫測試
+    - _需求: 10.1, 10.2, 10.4_
+
+- [ ] 12. 創建全面的測試套件
+
+  - [ ] 12.1 為所有領域邏輯編寫單元測試
+
+    - 為實體行為和業務規則創建測試
+    - 為服務層操作添加測試
+    - 實施事件發布和處理的測試
+    - 為關鍵路徑達到 90%+ 的程式碼覆蓋率
+    - _需求: 所有需求驗證_
+
+  - [ ] 12.2 實施整合測試
+
+    - 為儲存庫創建資料庫整合測試
+    - 添加 API 端點整合測試
+    - 使用模擬實施外部服務整合測試
+    - 測試錯誤處理和邊緣情況
+    - _需求: 所有需求驗證_
+
+  - [ ] 12.3 添加端到端工作流測試
+    - 創建完整的審批工作流測試場景
+    - 測試多階段審批流程
+    - 添加並行審批和批量操作測試
+    - 實施超時和升級測試場景
+    - _需求: 所有需求驗證_
+
+- [ ] 13. 性能優化和快取
+
+  - [ ] 13.1 實施快取策略
+
+    - 為經常訪問的工作流配置添加 Redis 快取
+    - 實施具有 TTL 的用戶權限快取
+    - 為配置變更創建快取失效策略
+    - 為快取行為編寫測試
+    - _需求: 9.6, 10.3_
+
+  - [ ] 13.2 添加資料庫查詢優化
+    - 優化審批儀表板和歷史視圖的查詢
+    - 為性能添加適當的資料庫索引
+    - 為大型資料集實施查詢結果分頁
+    - 為關鍵查詢編寫性能測試
+    - _需求: 4.1, 4.2, 8.1, 8.2_
+
+- [ ] 14. 安全性和授權
+
+  - [ ] 14.1 實施基於角色的存取控制
+
+    - 為 API 端點添加授權中介軟體
+    - 實施審批者權限驗證
+    - 為工作流配置創建僅限管理員的端點
+    - 為授權場景編寫安全測試
+    - _需求: 2.1, 3.1, 3.3_
+
+  - [ ] 14.2 為安全事件添加稽核日誌記錄
+    - 為未授權存取嘗試實施安全事件日誌記錄
+    - 為權限變更和升級添加日誌記錄
+    - 創建安全監控和警報
+    - 為安全日誌記錄編寫測試
+    - _需求: 8.4, 10.1, 10.2_
+
+- [ ] 15. 文檔和部署準備
+
+  - [ ] 15.1 創建 API 文檔
+
+    - 為所有端點生成 OpenAPI/Swagger 文檔
+    - 添加範例請求和回應
+    - 為外部服務創建整合指南
+    - 編寫部署和配置文檔
+    - _需求: 9.1, 9.2, 9.3_
+
+  - [ ] 15.2 準備部署配置
+    - 為容器化部署創建 Docker 配置
+    - 添加特定環境的配置檔案
+    - 實施優雅關閉處理
+    - 創建部署腳本和健康檢查
+    - _需求: 10.4, 9.6_
